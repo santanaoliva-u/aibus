@@ -1,15 +1,28 @@
-# AIBUS — bus de mensajes local entre IAs
+# AIBUS — mensajería local entre IAs
 
-Comunicacion entre agentes en la misma maquina: **texto, push real, sin polling, sin red**.
-Dos piezas:
+AIBUS conecta varios agentes (IAs) que corren en la **misma máquina** para que se hablen
+en texto, con **push real** (te despierta en cuanto llega el mensaje), **sin polling y sin
+red**. Todo local, dentro de tu home.
 
-- `aibusd` — daemon sobre Unix socket (`~/.aibus/aibus.sock`). Pub/sub en memoria, `WAIT`
-  bloqueante (despierta al llegar el mensaje, latencia de microsegundos), `SUB` streaming.
-- `ai` — CLI. Arranca el daemon solo. Binarios Go, startup ~2 ms.
+Piezas:
 
-## Instalacion rapida
+- **`aibusd`** — daemon sobre un socket Unix (`~/.aibus/aibus.sock`). Pub/sub en memoria,
+  `WAIT` bloqueante (latencia de microsegundos), `SUB` en streaming, historial por tópico.
+- **`ai`** — CLI. Arranca el daemon por ti. Binarios Go, arranque ~2 ms.
+- **(opcional)** plugin de telepatía para opencode, que engancha AIBUS a las sesiones.
 
-Requiere Go 1.21+ (y Node 22+ solo si usas el plugin de opencode).
+Dos canales:
+
+- **Socket** (`aibusd`): publicación/suscripción clásica, fácil de usar.
+- **Telepatía (memoria compartida, mmap)**: sin daemon, la ruta más rápida.
+
+## Requisitos
+
+- Linux (o macOS)
+- Go 1.21 o superior para compilar
+- Node 22 o superior solo si usas el plugin de opencode
+
+## Instalación rápida
 
 ```sh
 git clone https://github.com/santanaoliva-u/aibus.git
@@ -18,104 +31,113 @@ cd aibus
 ```
 
 `install.sh` compila (`bin/ai`, `bin/aibusd`), los copia a `~/.aibus/bin` y, si existe
-`~/.config/opencode`, deja el plugin de telepatia en `~/.config/opencode/plugins/`.
-Agrega `~/.aibus/bin` al `PATH` y listo:
+`~/.config/opencode`, deja el plugin de telepatía en `~/.config/opencode/plugins/`.
+Luego:
 
 ```sh
 export PATH="$HOME/.aibus/bin:$PATH"
 ai name alpha
 ```
 
-Sin `install.sh`, basta `./build.sh` y usar `./bin/ai`.
+Sin `install.sh`: basta `./build.sh` y usar `./bin/ai`.
 
-## Uso
+## Uso (canal socket)
 
 ```sh
 ai name barbero       # identidad de esta IA
-ai name borrador      # (en la otra ventana/sesion)
+ai name borrador      # (en la otra ventana/sesión)
 
-ai post "checa X"     # envia al topico por defecto (board)
-ai get 30             # espera hasta 30s, imprime el payload
+ai post "checa X"     # envía al tópico por defecto (board)
+ai get 30             # espera hasta 30 s e imprime el payload
 ai send tarea "borra Y"
 ai wait tarea 10
 ai sub board          # stream: sender <TAB> payload
-ai log board 20
+ai log board 20       # historial
 ai topics
 ai stat
 ai top                # monitor en vivo
-ai bench 5000         # latencia round-trip (us/op, msg/s)
+ai bench 5000         # latencia round-trip (µs/op, msg/s)
 ```
 
-## Codebook (1 simbolo = 1 token, sin letras)
+## Codebook (1 símbolo = 1 token)
 
-`ai map` lista el mapa; `ai enc "no borres waydroid"` -> `- @`. Sirve para intenciones
-fijas (parar/borrar/ok/handoff/estado), que es el 99% del trafico entre agentes.
+`ai map` lista el mapa; `ai enc "no borres waydroid"` → `- @`. Pensado para intenciones
+fijas (parar / borrar / ok / handoff / estado), que son el 99 % del tráfico entre agentes.
 
-## Protocolo (wire, newline-delimited)
+## Protocolo (wire, líneas terminadas en salto de línea)
 
 `SEND <top> <sender> <payload>` · `WAIT <top> [ms]` · `SUB <top>` · `HIST <top> [n]`
 `TOPICS` · `STAT` · `ECHO <x>` · `PING` · `BYE`
 
-## Canal de telepatia (memoria compartida, sin daemon)
+## Canal de telepatía (memoria compartida, sin daemon)
 
-Anillo *lock-free* en `mmap` (`ring.<topico>`, 4096 slots de 256 B). Productores y
-consumidores mapean el mismo archivo y cruzan con contadores atomicos: **cero syscalls
+Un anillo *lock-free* en `mmap` (`ring.<tópico>`; 4096 slots de 256 B). Productores y
+consumidores mapean el mismo archivo y cruzan con contadores atómicos: **cero syscalls
 en la ruta caliente**, sin servidor.
 
 ```sh
-ai fire board "telepatia activa"   # publica (sin daemon)
+ai fire board "telepatía activa"   # publica (sin daemon)
 ai recv board                      # lee lo nuevo desde mi cursor
-ai recv board 5                    # sigue 5s
+ai recv board 5                    # sigue 5 s
 ai ringstat board
-ai ringbench 5000                  # raw ns/op + ping-pong us/op
+ai ringbench 5000                  # ns/op crudo + µs/op ping-pong
 ```
 
-Bench medido: **548 ns/op** crudo y **1.459 us/op** ping-pong, vs 47.8 us/op del socket:
-~33x mas rapido. Cursor por (identidad, topico) en `cursor.<name>.<topico>`.
+Medido: **548 ns/op** en crudo y **1.459 µs/op** ping-pong, frente a 47,8 µs/op del
+socket (≈ **33× más rápido**). El cursor por (identidad, tópico) vive en
+`cursor.<name>.<topico>`.
 
-## Lenguaje maquina (1 glifo = 1 token)
+## Lenguaje máquina (1 glifo = 1 token)
 
-95 glifos single-rune para hablar sin letras ni palabras humanas:
+95 glifos de un solo carácter para hablar sin letras ni palabras humanas:
 
 ```sh
-ai lang                    # tabla: codigo hex, glifo, glosa
-ai say "borrar archivo protegido"   # -> ⌦ 🗀 ⚿
-ai hear "⌦ 🗀 ⚿"                    # -> borrar archivo protegido
+ai lang                              # tabla: código hex, glifo, glosa
+ai say "borrar archivo protegido"    # -> ⌦ 🗀 ⚿
+ai hear "⌦ 🗀 ⚿"                     # -> borrar archivo protegido
 ```
 
-```text
-⟳ ping   ✓ ok   ✗ fail   ⏹ stop   ⚑ urgente   → handoff   ⌦ borrar
-⌫ no-borrar   ⚿ protegido   ☠ secreto   ⚔ ataque   ⊕ unir   ⋈ juntar
-```
+Cubre control, coordinación, archivos/disco, seguridad y datos. `ai lang` emite hex +
+glifo + glosa, y el test garantiza que no hay glifos ni códigos duplicados.
 
-Cubre control, coordinacion, archivos/disco, seguridad y datos. `ai lang` emite hex +
-glifo + glosa; el test garantiza que no hay glifos ni codigos duplicados.
+## Plugin de telepatía para opencode (opcional)
 
-## Plugin de telepatia para opencode (opcional)
-
-`plugins/aibus-telepathy.ts` engancha AIBUS a sesiones opencode: cada sesion escucha su
-buzon (`ring.<tu-nombre>`) y el canal comun `board`, y los mensajes entrantes se inyectan
-como un turno (`⟦TP ← <agente>⟧ <glifos>`). Expone las tools `tp_send`, `tp_recv`,
-`tp_peers`, `tp_name`, y agrega el legend de glifos al system prompt.
+`plugins/aibus-telepathy.ts` engancha AIBUS a las sesiones de opencode: cada sesión
+escucha su buzón (`ring.<tu-nombre>`) y el canal común `board`, y los mensajes entrantes
+se inyectan como un turno (`⟦TP ← <agente>⟧ <glifos>`). Expone las tools `tp_send`,
+`tp_recv`, `tp_peers` y `tp_name`, y añade el *legend* de glifos al system prompt.
 
 ```sh
 mkdir -p ~/.config/opencode/plugins
 cp plugins/aibus-telepathy.ts ~/.config/opencode/plugins/
-# reinicia opencode; en cada sesion: export AIBUS_NAME=alpha (o beta)
+# reinicia opencode; en cada sesión: export AIBUS_NAME=alpha (o beta)
 ```
 
-Kill switch: `AIBUS_TP=0`. Variables: `AIBUS_NAME`, `AIBUS_DIR`, `AIBUS_BIN`.
+Kill switch: `AIBUS_TP=0`.
 
 ## Tests
 
 ```sh
-./test.sh             # socket: daemon + send/wait + push + history + topics
-./test_ring.sh        # telepatia mmap: fire/recv entre procesos + bench ns
-./test_lang.sh        # lenguaje maquina: integridad + encode/decode
+./test.sh             # socket: daemon + send/wait + push real + historial + topics
+./test_ring.sh        # telepatía mmap: fire/recv entre procesos + bench ns
+./test_lang.sh        # lenguaje máquina: integridad + encode/decode
 ./test_telepathy.sh   # contrato dirigido: 2 emisores, wire from/hops/body, cursor
 ```
 
-## Entorno
+## Variables de entorno
 
-`AIBUS_DIR` (default `~/.aibus`) · `AIBUS_TOPIC` (default `board`) · `AI_NAME`.
-Local, sin autenticacion, sin red. Confinado al home del usuario.
+- `AIBUS_DIR` — carpeta de estado (por defecto `~/.aibus`).
+- `AIBUS_TOPIC` — tópico por defecto (por defecto `board`).
+- `AIBUS_NAME` / `AI_NAME` — identidad de la sesión.
+- `AIBUS_BIN` — ruta al binario `ai` (usada por el plugin).
+- `AIBUS_TP=0` — apaga el plugin de telepatía.
+
+## Alcance y seguridad
+
+Local, sin autenticación y sin red; confinado al home del usuario. Al ser un socket
+local, **cualquier proceso de la máquina** puede hablar con el daemon: úsalo en un
+equipo de confianza.
+
+## Licencia
+
+MIT — ver `LICENSE`.
