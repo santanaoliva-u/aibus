@@ -1,0 +1,27 @@
+# build artifacts
+bin/
+*.exe
+
+# runtime state (socket, memory-mapped rings, cursors, identity, peers)
+*.sock
+ring.*
+cursor.*
+name
+peers/
+*.pid
+
+# python / node
+__pycache__/
+*.pyc
+node_modules/
+package.json
+package-lock.json
+
+# logs / scratch
+*.log
+*.tmp
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/

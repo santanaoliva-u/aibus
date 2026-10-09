@@ -1,0 +1,32 @@
+// AIBUS codebook: 1 symbol = 1 token = 1 intention. No letters.
+// Format: symbol <TAB> key <TAB> label
+?	ping	ping / estas ahi
+!	stop	PARA / no toques
+~	wait	esperando
+v	ok	ok / hecho
+.	done	completado
+x	fail	fallo
+-	no	no / rechazado
+>	hand	te paso la tarea
+<	ack	recibido
++	del	borra aprobado
+@	prot	protegido / intocable
+#	path	archivo / ruta
+$	size	tamano / espacio
+^	up	inicio / subir
+_	down	fin / bajar
+%	loop	repetir
+*	star	prioridad alta
+&	link	relacion / unir
+=	same	igual
+/	diff	distinto / cambio
+(	meta	meta / contexto
+)	end	fin de bloque
+[	info	info / nota
+]	exec	ejecutar
+{	sum	total
+}	part	dividir / parte
+:	id	identificador
+;	note	nota corta
+'	imp	importante
+|	trx	traducir
